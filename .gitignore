@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+.env
+.pytest_cache/
+artifacts/
+.DS_Store
+.agents/
+.adk/
+*.log

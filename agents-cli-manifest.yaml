@@ -1,0 +1,19 @@
+name: it-helpdesk-adk-v7
+version: 0.1.0
+description: "Enterprise IT Helpdesk Native ADK Agent Engine with Dynamic MCP Server Discovery."
+agent_directory: app
+entrypoint: app.agent_engine_app:agent_engine
+
+agent_framework: adk
+
+create_params:
+  deployment_target: agent_runtime
+  is_a2a: false
+environment:
+  python_version: "3.12"
+  region: us-central1
+deployment:
+  target: agent_runtime
+  runtime: vertex-ai-agent-engine
+  min_instances: 1
+  max_instances: 5

@@ -1,0 +1,10 @@
+google-adk==1.36.2
+google-cloud-aiplatform>=1.163.0
+mcp>=1.0.0
+requests
+google-cloud-logging
+aiohttp
+pydantic
+fastapi
+uvicorn
+httpx
