@@ -1,0 +1,20 @@
+{
+  "name": "it_helpdesk_assistant_eval_suite",
+  "eval_dataset": [
+    {
+      "query": "Check status of INC-101",
+      "expected_tool": "get_ticket_status",
+      "expected_keywords": ["INC-101", "In Progress", "Sarah Connor"]
+    },
+    {
+      "query": "Is VPN down?",
+      "expected_tool": "get_system_status",
+      "expected_keywords": ["Corporate VPN", "Degraded Performance"]
+    },
+    {
+      "query": "Submit password reset request for user Dave",
+      "expected_tool": "request_access",
+      "expected_keywords": ["REQ-", "Submitted"]
+    }
+  ]
+}

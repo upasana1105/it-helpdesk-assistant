@@ -1,0 +1,6 @@
+{
+  "remote_agent_runtime_id": "api_client=<vertexai._genai.agent_engines.AgentEngines object at 0x7f463e118ef0> api_async_client=None api_resource=None",
+  "deployment_target": "agent_runtime",
+  "is_a2a": false,
+  "deployment_timestamp": "2026-08-03T10:48:02.835601"
+}
