@@ -17,6 +17,40 @@
 
 ---
 
+## 💡 What is `Jev` (`jev-1.13.0`) and Why Did We Use It?
+
+### 1. What is `Jev`?
+**[Jev (`jev-1.13.0`)](https://www.typesafe.ai/blog/introducing-system-one-models-and-jev)** by **TypeSafe AI** is a **System-1 Calibrated Judgment Model** purpose-built for AI agent control flow, routing, guardrails, and batch evaluation.
+
+Unlike **System-2 generative LLMs** (`Gemini`, `GPT`, `Claude`)—which generate text token-by-token autoregressively and whose verbalized confidence numbers (`"confidence": 0.95`) are uncalibrated—**`jev-1.13.0` is a non-generative, single-pass (`~130ms–260ms`) epistemic judgment engine**. Instead of generating prose or brittle JSON strings, a single `jev-1.13.0` forward pass evaluates a typed **`JudgmentSchema`** ([`mbonnardot/judgment-base-agent`](https://github.com/mbonnardot/judgment-base-agent)) and returns mathematically calibrated probability distributions over three primitives:
+
+| `jev-1.13.0` Primitive | Mathematical Output | What It Does in Our ADK Agent |
+| :--- | :--- | :--- |
+| **`Choice`** (`ChoiceField`) | Calibrated categorical distribution ($\sum_{i} p_i = 1.0$) | Selects the exact live Jira MCP route (`jira_get_issue`, `jira_search_issues`, or `jira_write_action`) with calibrated confidence (`conf >= 0.50`). |
+| **`Noul`** (`NoulField`) | Calibrated epistemic binary truth probability $P(\text{True}) \in [0.0, 1.0]$ | Measures **epistemic completeness & safety**:<br>• `has_specific_target` (`>= 0.65`): Detects when a user forgot to name a ticket/target.<br>• `is_safe_not_injection` (`>= 0.50`): Blocks adversarial prompt injection.<br>• `has_actionable_engineering_detail` (`>= 0.65`): Blocks junk ticket writes (`test bug`). |
+| **`Score`** (`ScoreField`) | Continuous expectation $\mathbb{E}[\text{score}] = \sum_k k \cdot p_k \in [0.00, 3.00]$ | Computes a smooth, tie-free continuous **`sla_priority_score` (`0.00–3.00`)** across every live Jira workstream (`WAR-26`: `2.07`, `WAR-14`: `1.99`, `WAR-28`: `1.91`). |
+
+---
+
+### 2. Why Did We Use `Jev` in Our Google ADK Helpdesk Agent?
+
+When we connected our baseline single-LLM agent (`it_helpdesk` on `gemini-3.8-flash`) directly to our live Cloud Run `jira-mcp-server` (`30+` open tickets in project `WAR`), we hit four production failure modes that **System-2 LLMs are structurally unsuited to solve alone**:
+
+1. **LLMs Suffer from "Tool-Call Action Bias" on Vague Prompts (`Epistemic Abstention`)**
+   - *Problem:* When a user asks *"show me the summary of a jira ticket"* (without specifying which ticket), a standard LLM still wakes up, reasons, and fires a blind `jira_search_issues(query="")` against Cloud Run (`~4s`, `1–2` LLM turns).
+   - *Why `Jev` fixes it:* `jev-1.13.0` evaluates `has_specific_target` (`Noul = 0.02 < 0.65`) in **`~260ms`** and immediately abstains (`clarify_question_agent`), burning **`0` Gemini tokens and `0` wasted MCP calls**.
+2. **Wasting Frontier LLM Calls on Deterministic Lookups (`Zero-LLM Fast-Path`)**
+   - *Problem:* When an engineer asks *"What is the status of WAR-14?"*, the normal agent makes **2 full Gemini calls** (`~8.2s`)—one to emit the `jira_get_issue("WAR-14")` tool call, and a second to summarize the returned JSON.
+   - *Why `Jev` fixes it:* `JudgmentSwitch` (`jev-1.13.0`) confirms `Choice = jira_get_issue (conf=1.00)` and `has_specific_target = 0.99` in `~260ms` and executes `jira_get_issue("WAR-14")` directly on Cloud Run MCP (**`100%` reduction in Gemini LLM calls**).
+3. **Preventing Live Jira Backlog Pollution (`Calibrated Tool-Write Gate`)**
+   - *Problem:* When asked *"Create a new bug in WAR with summary 'test bug'"*, the normal LLM agent immediately called `jira_create_issue` and polluted our live Jira with `WAR-31: test bug`.
+   - *Why `Jev` fixes it:* `JiraWriteQualitySchema` (`jev-1.13.0`) gates `jira_create_issue` on `has_actionable_engineering_detail >= 0.65`. It blocks `test bug` at `Noul = 0.01` (`0` Gemini calls), while allowing detailed SRE comments (`Noul = 0.98`) to write straight to live Jira. Even better, after the normal agent created `WAR-31: test bug`, `it_helpdesk_jev`'s `JudgmentMap` automatically scored `WAR-31` at `0.31 / 3.00` and filtered it out as noise (`🗑️ FILTERED`)!
+4. **Replacing Slow Sequential ReAct Loops with 1-Pass Batch Scoring (`JudgmentMap`)**
+   - *Problem:* When asked *"triage all jira issues that have breached sla"*, the normal LLM either dumped all `30` raw tickets (`WAR-30: test`, `WAR-29: test`) claiming all `30` breached SLA, or ran `10` sequential MCP tool turns (`~40.2s`) and **missed `WAR-14`** (*API Gateway Auth Latency > 2000ms*).
+   - *Why `Jev` fixes it:* `JudgmentMap` evaluates **all `24` calibrated judgments (`8` deduplicated workstreams $\times$ `3` criteria)** in **1 single `jev-1.13.0` call (`~300ms`)**, deterministically ranking the **3 real SLA breaches** (`WAR-26`: `2.07`, `WAR-14`: `1.99`, `WAR-28`: `1.91`) and invoking `gemini-3.8-flash` **only once** to write the 3-bullet SRE & RevOps remediation plan (**`90%` fewer LLM calls, `3.4x` faster, `100%` recall**).
+
+---
+
 ## 📊 Measured Performance & Quality Gains (Live Cloud Run Jira Benchmark)
 
 | Query Category (Live Jira Project `WAR`) | Normal ADK Agent (`it_helpdesk` — `gemini-3.8-flash`) | Jev Router & Judge (`it_helpdesk_jev` — `jev-1.13.0` + `gemini-3.8-flash`) | **LLM Call Reduction** | **Latency Speedup** |
