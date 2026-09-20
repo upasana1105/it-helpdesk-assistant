@@ -1,4 +1,4 @@
-"""IT Helpdesk Agent Package."""
+"""Single-Agent (`1-Box`) Jev Integration via ADK `BasePlugin` (`it_helpdesk_jev_plugin`)."""
 from pathlib import Path
 import sys
 

@@ -1,4 +1,4 @@
-"""IT Helpdesk Agent Package."""
+"""IT Helpdesk Jev Agent Package."""
 from pathlib import Path
 import sys
 
